@@ -11,7 +11,6 @@
 #include <unistd.h>
 
 auto sdb::process::launch(std::filesystem::path path) -> std::unique_ptr<process> {
-
     pid_t pid;
     if ((pid = fork()) < 0) {
         error::send_errno("fork failed");
@@ -25,18 +24,17 @@ auto sdb::process::launch(std::filesystem::path path) -> std::unique_ptr<process
         }
     }
 
-    std::unique_ptr<process> proc (new process(pid, true));
+    std::unique_ptr<process> proc(new process(pid, true));
     proc->wait_on_signal();
     return proc;
 }
 
 auto sdb::process::attach(pid_t pid) -> std::unique_ptr<process> {
-
     if (pid == 0) {
         error::send("Invalid PID");
     }
 
-    if (ptrace(PTRACE_ATTACH, pid, nullptr, nullptr)< 0) {
+    if (ptrace(PTRACE_ATTACH, pid, nullptr, nullptr) < 0) {
         error::send_errno("Could not attach");
     }
 
@@ -46,9 +44,20 @@ auto sdb::process::attach(pid_t pid) -> std::unique_ptr<process> {
 }
 
 auto sdb::process::resume() -> void {
+    if (ptrace(PTRACE_CONT, this->pid(), nullptr, nullptr) < 0) {
+        error::send_errno("Could not resume");
+    }
+    this->state_ = process_state::running;
 }
 
-auto sdb::process::wait_on_signal() -> void {
+auto sdb::process::wait_on_signal() -> stop_reason {
+    int wait_status;
+    if (constexpr int options = 0; waitpid(this->pid(), &wait_status, options) < 0) {
+        error::send_errno("waitpid failed");
+    }
+    const stop_reason reason(wait_status);
+    this->state_ = reason.reason;
+    return reason;
 }
 
 sdb::process::~process() {
@@ -62,8 +71,22 @@ sdb::process::~process() {
         kill(this->pid(), SIGCONT);
 
         if (this->terminate_on_end_) {
-            kill(this->pid(), SIGKILL) ;
+            kill(this->pid(), SIGKILL);
             waitpid(this->pid(), &status, 0);
         }
+    }
+}
+
+
+sdb::stop_reason::stop_reason(int wait_status) {
+    if (WIFEXITED(wait_status)) {
+        this->reason = process_state::exited;
+        this->info = WEXITSTATUS(wait_status);
+    } else if (WIFSIGNALED(wait_status)) {
+        this->reason = process_state::terminated;
+        this->info = WTERMSIG(wait_status);
+    } else if (WIFSTOPPED(wait_status)) {
+        this->reason = process_state::stopped;
+        this->info = WSTOPSIG(wait_status);
     }
 }

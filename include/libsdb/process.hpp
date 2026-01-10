@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <memory>
 #include <sys/types.h>
+#include <cstdint>
 
 namespace sdb {
     enum class process_state {
@@ -15,6 +16,12 @@ namespace sdb {
         running,
         exited,
         terminated,
+    };
+
+    struct stop_reason {
+        stop_reason(int wait_status);
+        process_state reason;
+        std::uint8_t info;
     };
 
     class process {
@@ -25,7 +32,7 @@ namespace sdb {
 
         auto resume() -> void;
 
-        auto wait_on_signal() -> void;
+        auto wait_on_signal() -> stop_reason;
 
         [[nodiscard]] auto pid() const -> pid_t { return pid_; }
 
