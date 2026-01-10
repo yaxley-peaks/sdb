@@ -1,4 +1,4 @@
-add_library(libsdb libsdb.cpp)
+add_library(libsdb process.cpp)
 add_library(sdb::libsdb ALIAS libsdb)
 
 set_target_properties(
@@ -19,7 +19,7 @@ target_include_directories(
 include(GNUInstallDirs)
 
 install(TARGETS libsdb
-    EXPORT sdb-targets
+        EXPORT sdb-targets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
