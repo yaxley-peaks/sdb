@@ -1,0 +1,7 @@
+{
+  "dependencies" : [ "libedit", {
+    "name" : "catch2"
+  } ],
+  "version-string" : "0.0.1",
+  "name" : "sdb"
+}
