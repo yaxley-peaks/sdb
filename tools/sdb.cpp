@@ -4,10 +4,6 @@
 
 
 #include <iostream>
-#include <unistd.h>
-#include <sys/ptrace.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -23,7 +19,7 @@
 
 
 namespace {
-    auto split(std::string_view str, char delimiter) -> std::vector<std::string> {
+    auto split(const std::string_view str, char delimiter) -> std::vector<std::string> {
         std::vector<std::string> out{};
         std::stringstream ss{std::string{str}};
         std::string item;
@@ -34,25 +30,9 @@ namespace {
         return out;
     }
 
-    auto is_prefix(std::string_view str, std::string_view of) -> bool {
+    auto is_prefix(const std::string_view str, std::string_view of) -> bool {
         if (str.size() > of.size()) return false;
         return std::equal(str.begin(), str.end(), of.begin());
-    }
-
-    auto resume(pid_t pid) -> void {
-        if (ptrace(PTRACE_CONT, pid, nullptr, nullptr) < 0) {
-            std::cerr << "Couldn't continue\n";
-            std::exit(-1);
-        }
-    }
-
-    auto wait_on_signal(pid_t pid) -> void {
-        int wait_status = 0;
-        int options = 0;
-        if (waitpid(pid, &wait_status, options) < 0) {
-            std::cerr << "waitpid failed\n";
-            std::exit(-1);
-        }
     }
 
     auto print_stop_reason(
@@ -88,7 +68,7 @@ namespace {
         }
     }
 
-    auto attach(int argc, const char **argv) -> std::unique_ptr<sdb::process> {
+    auto attach(const int argc, const char **argv) -> std::unique_ptr<sdb::process> {
         if (argc == 3 && argv[1] == std::string_view("-p")) {
             const auto pid = static_cast<pid_t>(std::strtol(argv[2], nullptr, 0));
             return sdb::process::attach(pid);
@@ -99,7 +79,7 @@ namespace {
     }
 
 
-    void main_loop(std::unique_ptr<sdb::process> &process) {
+    void main_loop(const std::unique_ptr<sdb::process> &process) {
         char *line = nullptr;
         while ((line = readline("sdb> ")) != nullptr) {
             std::string line_str;
@@ -125,14 +105,14 @@ namespace {
     }
 }
 
-int main(int argc, const char **argv) {
+int main(const int argc, const char **argv) {
     if (argc == 1) {
         std::cerr << "No arguments given\n";
         return -1;
     }
 
     try {
-        auto process = attach(argc, argv);
+        const auto process = attach(argc, argv);
         main_loop(process);
     } catch (const sdb::error &err) {
         std::cout << err.what() << '\n';
