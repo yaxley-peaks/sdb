@@ -10,22 +10,49 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-auto sdb::process::launch(std::filesystem::path path) -> std::unique_ptr<process> {
+#include "libsdb/pipe.hpp"
+
+
+namespace {
+    auto exit_with_error(
+        const sdb::pipe &channel,
+        std::string const &prefix
+    ) -> void {
+        auto message = prefix + ": " + std::strerror(errno);
+        channel.write(reinterpret_cast<std::byte *>(message.data()), message.size());
+        exit(-1);
+    }
+}
+
+auto sdb::process::launch(std::filesystem::path path, bool debug) -> std::unique_ptr<process> {
+    pipe channel(true);
     pid_t pid;
     if ((pid = fork()) < 0) {
         error::send_errno("fork failed");
     }
     if (pid == 0) {
-        if (ptrace(PTRACE_TRACEME, 0, nullptr, nullptr) < 0) {
-            error::send_errno("tracing failed");
+        channel.close_read();
+        if (debug and ptrace(PTRACE_TRACEME, 0, nullptr, nullptr) < 0) {
+            exit_with_error(channel, "Tracing failed");
         }
         if (execlp(path.c_str(), path.c_str(), nullptr) < 0) {
-            error::send_errno("exec failed");
+            // if this succeeds, channel will auto close.
+            exit_with_error(channel, "exec failed");
         }
     }
 
-    std::unique_ptr<process> proc(new process(pid, true));
-    proc->wait_on_signal();
+    channel.close_write();
+    auto data = channel.read();
+    channel.close_read();
+
+    if (data.size() > 0) {
+        waitpid(pid, nullptr, 0);
+        const auto chars = reinterpret_cast<char *>(data.data());
+        error::send(std::string(chars, chars + data.size()));
+    }
+
+    std::unique_ptr<process> proc(new process(pid, true, debug));
+    if (debug) { proc->wait_on_signal(); }
     return proc;
 }
 
@@ -38,7 +65,7 @@ auto sdb::process::attach(pid_t pid) -> std::unique_ptr<process> {
         error::send_errno("Could not attach");
     }
 
-    std::unique_ptr<process> proc(new process(pid, false));
+    std::unique_ptr<process> proc(new process(pid, false, true));
     proc->wait_on_signal();
     return proc;
 }
@@ -63,12 +90,14 @@ auto sdb::process::wait_on_signal() -> stop_reason {
 sdb::process::~process() {
     if (this->pid() != 0) {
         int status;
-        if (this->state() == process_state::running) {
-            kill(this->pid(), SIGSTOP);
-            waitpid(this->pid(), &status, 0);
+        if (this->is_attached_) {
+            if (this->state() == process_state::running) {
+                kill(this->pid(), SIGSTOP);
+                waitpid(this->pid(), &status, 0);
+            }
+            ptrace(PTRACE_DETACH, this->pid(), nullptr, nullptr);
+            kill(this->pid(), SIGCONT);
         }
-        ptrace(PTRACE_DETACH, this->pid(), nullptr, nullptr);
-        kill(this->pid(), SIGCONT);
 
         if (this->terminate_on_end_) {
             kill(this->pid(), SIGKILL);
