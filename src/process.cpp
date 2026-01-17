@@ -117,6 +117,18 @@ auto sdb::process::wait_on_signal() -> stop_reason {
     return reason;
 }
 
+auto sdb::process::write_fprs(const user_fpregs_struct &fprs) -> void {
+    if (ptrace(PTRACE_SETFPREGS, this->pid(), nullptr, &fprs) < 0) {
+        error::send_errno("Could not write floating point registers");
+    }
+}
+
+auto sdb::process::write_gprs(const user_regs_struct &gprs) -> void {
+    if (ptrace(PTRACE_SETREGS, this->pid(), nullptr, &gprs) < 0) {
+        error::send_errno("Could not write general purpose registers");
+    }
+}
+
 sdb::process::~process() {
     if (this->pid() != 0) {
         int status;

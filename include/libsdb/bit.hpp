@@ -29,7 +29,7 @@ namespace sdb {
     }
 
     template<typename From>
-    auto to_byte12(From src) -> byte128 {
+    auto to_byte128(From src) -> byte128 {
         byte128 ret{};
         std::memcpy(&ret, &src, sizeof(From));
         return ret;

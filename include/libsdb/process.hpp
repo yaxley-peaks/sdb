@@ -21,6 +21,7 @@ namespace sdb {
 
     struct stop_reason {
         stop_reason(int wait_status);
+
         process_state reason;
         std::uint8_t info;
     };
@@ -39,8 +40,11 @@ namespace sdb {
 
         [[nodiscard]] auto state() const -> process_state { return state_; }
 
-        auto get_registers() -> registers & {return *this->registers_;}
-        auto get_registers() const -> const registers & {return *this->registers_;}
+        auto get_registers() -> registers & { return *this->registers_; }
+        auto get_registers() const -> const registers & { return *this->registers_; }
+
+        auto write_fprs(const user_fpregs_struct &fprs) -> void;
+        auto write_gprs(const user_regs_struct &gprs) -> void;
 
         void write_user_area(std::size_t offset, std::uint64_t data);
 
@@ -63,7 +67,8 @@ namespace sdb {
         void read_all_registers();
 
         process(pid_t pid, bool terminate_on_end, bool is_attached)
-            : pid_(pid), terminate_on_end_(terminate_on_end), is_attached_(is_attached), registers_(new registers(*this)){
+            : pid_(pid), terminate_on_end_(terminate_on_end), is_attached_(is_attached),
+              registers_(new registers(*this)) {
         }
     };
 }
