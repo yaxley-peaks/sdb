@@ -9,6 +9,7 @@
 #include <memory>
 #include <sys/types.h>
 #include <cstdint>
+#include <libsdb/registers.hpp>
 
 namespace sdb {
     enum class process_state {
@@ -38,6 +39,11 @@ namespace sdb {
 
         [[nodiscard]] auto state() const -> process_state { return state_; }
 
+        auto get_registers() -> registers & {return *this->registers_;}
+        auto get_registers() const -> const registers & {return *this->registers_;}
+
+        void write_user_area(std::size_t offset, std::uint64_t data);
+
         process() = delete;
 
         process(const process &) = delete;
@@ -52,8 +58,12 @@ namespace sdb {
         bool is_attached_ = true;
         process_state state_ = process_state::stopped;
 
+        std::unique_ptr<registers> registers_;
+
+        void read_all_registers();
+
         process(pid_t pid, bool terminate_on_end, bool is_attached)
-            : pid_(pid), terminate_on_end_(terminate_on_end), is_attached_(is_attached){
+            : pid_(pid), terminate_on_end_(terminate_on_end), is_attached_(is_attached), registers_(new registers(*this)){
         }
     };
 }

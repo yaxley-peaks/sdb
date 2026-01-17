@@ -70,6 +70,31 @@ auto sdb::process::attach(pid_t pid) -> std::unique_ptr<process> {
     return proc;
 }
 
+void sdb::process::write_user_area(std::size_t offset, std::uint64_t data) {
+    if (ptrace(PTRACE_POKEUSER, this->pid(), offset, data) < 0) {
+        error::send_errno("Could not write to user area");
+    }
+}
+
+void sdb::process::read_all_registers() {
+    if (ptrace(PTRACE_GETREGS, this->pid(), nullptr, &get_registers().data_.regs) < 0) {
+        error::send_errno("Could not read GPR registers");
+    }
+    if (ptrace(PTRACE_GETFPREGS, this->pid(), nullptr, &get_registers().data_.regs) < 0) {
+        error::send_errno("Could not read FPR registers");
+    }
+    for (int i = 0; i < 8; ++i) {
+        auto id = static_cast<int>(register_id::dr0) + 1;
+        auto info = register_info_by_id(static_cast<register_id>(id));
+
+        errno = 0;
+        std::int64_t data = ptrace(PTRACE_PEEKUSER, this->pid(), info.offset, nullptr);
+        if (errno != 0) error::send_errno("Could not read debug register " + std::to_string(id));
+
+        get_registers().data_.u_debugreg[i] = data;
+    }
+}
+
 auto sdb::process::resume() -> void {
     if (ptrace(PTRACE_CONT, this->pid(), nullptr, nullptr) < 0) {
         error::send_errno("Could not resume");
@@ -84,6 +109,11 @@ auto sdb::process::wait_on_signal() -> stop_reason {
     }
     const stop_reason reason(wait_status);
     this->state_ = reason.reason;
+
+    if (this->is_attached_ and this->state() == process_state::stopped) {
+        read_all_registers();
+    }
+
     return reason;
 }
 
