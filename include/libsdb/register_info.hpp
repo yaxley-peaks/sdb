@@ -5,10 +5,13 @@
 #ifndef SDB_REGISTER_INFO_HPP
 #define SDB_REGISTER_INFO_HPP
 
+#include <algorithm>
 #include <cstdint>
 #include <cstddef>
 #include <string_view>
 #include <sys/user.h>
+
+#include <libsdb/error.hpp>
 
 namespace sdb {
     enum class register_id {
@@ -41,6 +44,28 @@ namespace sdb {
 #include <libsdb/detail/registers.inc>
 #undef DEFINE_REGISTER
     };
+
+    template<typename F>
+    auto register_info_by(F f) -> const register_info & {
+        auto it = std::find_if(std::begin(g_register_infos),
+                               std::end(g_register_infos),
+                               f);
+        if (it == std::end(g_register_infos)) {
+            error::send("Can't fine register info");
+        }
+
+        return *it;
+    }
+
+    inline auto register_info_by_id(register_id id) -> const register_info & {
+        return register_info_by([id](const register_info& i) {return i.id == id;});
+    }
+    inline auto register_info_by_name(std::string_view name) -> const register_info & {
+        return register_info_by([name](const register_info& i) {return i.name == name;});
+    }
+    inline auto register_info_by_dwarf_(std::uint32_t dwarf_id) -> const register_info & {
+        return register_info_by([dwarf_id](const register_info& i) {return i.dwarf_id == dwarf_id;});
+    }
 }
 
 #endif //SDB_REGISTER_INFO_HPP
