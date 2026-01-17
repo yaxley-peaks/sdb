@@ -17,8 +17,9 @@ using namespace sdb;
 namespace {
     auto process_exists(const pid_t pid) -> bool {
         const auto ret = kill(pid, 0);
-        return  ret != -1 && errno != ESRCH;
+        return ret != -1 && errno != ESRCH;
     }
+
     auto get_process_status(const pid_t pid) -> char {
         std::ifstream stat("/proc/" + std::to_string(pid) + "/stat");
         std::string data;
@@ -47,4 +48,32 @@ TEST_CASE("process::attach success", "[process]") {
     const auto pid = process::launch("targets/run_endlessly", false);
     auto proc = process::attach(pid->pid());
     REQUIRE(get_process_status(pid->pid()) == 't');
+}
+
+TEST_CASE("process::attach invalid PID", "[process]") {
+    REQUIRE_THROWS_AS(process::attach(0), error);
+}
+
+
+TEST_CASE("process::resume success", "[process]") { {
+        const auto proc = process::launch("targets/run_endlessly");
+        proc->resume();
+        const auto status = get_process_status(proc->pid());
+        auto success = status == 'R' or status == 'S';
+        REQUIRE(success);
+    } {
+        const auto target = process::launch("targets/run_endlessly", false);
+        const auto proc = process::attach(target->pid());
+        proc->resume();
+        const auto status = get_process_status(proc->pid());
+        auto success = status == 'R' or status == 'S';
+        REQUIRE(success);
+    }
+}
+
+TEST_CASE("process::resume already terminated", "[process]") {
+    const auto proc = process::launch("targets/end_immediately");
+    proc->resume();
+    proc->wait_on_signal();
+    REQUIRE_THROWS_AS(proc->resume(), error);
 }
